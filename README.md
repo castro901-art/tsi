@@ -3,25 +3,19 @@
 **Trendify Sports Intelligence**  
 Understand the game beyond the score.
 
-TSI is a football analysis studio from Trendify Labs, built for independent analysts, pundits, journalists, creators and coaches. It turns authorised match highlights into timestamped observations and tactical discussion material, starting with Kenyan football and the FKF Premier League.
+TSI is a football analysis studio from Trendify Labs, built for independent analysts, pundits, journalists, creators and coaches. The initial focus is Kenyan football and the FKF Premier League.
 
 ## Development
 
-Early development. The first milestone is the video-ingestion and analysis backend, followed by the responsive studio.
+The first backend supports MP4 ingestion, queued Gemini analysis, saved candidate events and evidence-linked text reports. See [backend setup](docs/BACKEND.md) for local development.
 
-## Product scope
+Live-provider evaluation and the web studio are next. Pundit Mode, match chat, account authentication and movement review are planned, not implemented yet.
 
-- Analyse uploaded footage and supported video sources.
-- Review events alongside their video evidence.
-- Build tactical reports and pundit talking points.
-- Ask follow-up questions about an analysed match.
-- Review player movement and explore clearly labelled alternative runs or positions.
-- Save, export and share analyses.
-
-Highlights show only part of a match. TSI must distinguish visible evidence, interpretation and hypothetical scenarios rather than invent full-match statistics or outcomes.
+Highlights show only part of a match. TSI separates observations from interpretations and does not infer full-match statistics from edited footage.
 
 ## Documentation
 
+- [Backend setup and API](docs/BACKEND.md)
 - [Product requirements](docs/PRODUCT_REQUIREMENTS.md)
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
 
