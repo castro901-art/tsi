@@ -9,7 +9,7 @@ TSI is a football analysis studio from Trendify Labs for independent analysts, p
 
 The backend supports account sessions, authorised MP4 uploads, queued Gemini analysis, saved candidate events, evidence-linked text reports and protected video playback. See [backend setup](docs/BACKEND.md) for local development.
 
-Live-provider evaluation and the responsive studio are next. Pundit Mode, match chat, event review and movement review are still planned.
+The responsive studio is available at `/studio`; live-provider evaluation is still pending. Pundit Mode, match chat, event review and movement review are still planned.
 
 Highlights show only part of a match. TSI separates observations from interpretations and does not infer full-match statistics from edited footage.
 
@@ -20,3 +20,10 @@ Highlights show only part of a match. TSI separates observations from interpreta
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
 
 No software licence has been selected yet.
+
+## Analysis Studio
+
+Open `/studio` on the running API to upload authorised MP4s, check actual job states,
+review unverified evidence and download the existing plain-text report.
+See [studio setup and tests](docs/ANALYSIS_STUDIO.md). No sample analysis is shipped.
+R2 integration and hosted deployment remain separate follow-up work.

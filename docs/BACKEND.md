@@ -97,4 +97,4 @@ python -m pytest -q
 
 Tests cover account login/logout, password/session storage, expiry, CSRF/origin checks, throttling, per-user ownership, video ranges and the existing ingestion/analysis flow. Provider requests use test doubles. Live Gemini analysis and representative football footage still require evaluation.
 
-Pundit Mode, match chat, human event review, movement tracking, PDF export and the responsive frontend are not implemented yet.
+The responsive analysis studio is served at `/studio`; see [studio setup and browser tests](ANALYSIS_STUDIO.md). Pundit Mode, match chat, human event review, movement tracking and PDF export are not implemented yet.

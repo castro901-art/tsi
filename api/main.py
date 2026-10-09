@@ -1,5 +1,7 @@
 import asyncio
 import hashlib
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from uuid import UUID
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -25,6 +27,16 @@ async def lifespan(app):
 
 app = FastAPI(title="TSI API", version=config.PIPELINE_VERSION, lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(auth_router)
+
+# Serve only public studio assets; never expose private footage or account data.
+STUDIO = Path(__file__).resolve().parent.parent / "studio"
+app.mount("/studio/assets", StaticFiles(directory=STUDIO), name="studio-assets")
+
+
+@app.get("/studio", include_in_schema=False)
+@app.get("/studio/", include_in_schema=False)
+def studio():
+    return FileResponse(STUDIO / "index.html", headers={"Cache-Control": "no-store"})
 
 def job(job_id, owner_id):
     try:
