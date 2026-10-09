@@ -24,17 +24,29 @@ def connection():
 def init():
     with connection() as db:
         db.execute("PRAGMA journal_mode=WAL")
+        db.execute("BEGIN IMMEDIATE")
         db.execute("CREATE TABLE IF NOT EXISTS analyses (id TEXT PRIMARY KEY, status TEXT NOT NULL, metadata TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL, error TEXT, duration REAL, sha256 TEXT, result TEXT)")
 
 
-def create(metadata):
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(analyses)")}
+        if "owner_id" not in columns:
+            db.execute("ALTER TABLE analyses ADD COLUMN owner_id TEXT")
+        db.execute("CREATE INDEX IF NOT EXISTS analyses_owner ON analyses(owner_id)")
+        db.execute("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created REAL NOT NULL)")
+        db.execute("CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, csrf TEXT NOT NULL, expires REAL NOT NULL)")
+        db.execute("CREATE TABLE IF NOT EXISTS auth_limits (key TEXT PRIMARY KEY, started REAL NOT NULL, attempts INTEGER NOT NULL)")
+
+
+def create(metadata, owner_id):
     now = time.time()
     job_id = str(uuid.uuid4())
     with connection() as db:
         db.execute("BEGIN IMMEDIATE")
         if db.execute("SELECT COUNT(*) FROM analyses").fetchone()[0] >= config.MAX_JOBS:
             raise RuntimeError("storage_limit")
-        db.execute("INSERT INTO analyses (id,status,metadata,created,updated) VALUES (?,?,?,?,?)", (job_id, "awaiting_upload", json.dumps(metadata), now, now))
+        if db.execute("SELECT COUNT(*) FROM analyses WHERE owner_id=?", (owner_id,)).fetchone()[0] >= 5:
+            raise RuntimeError("account_analysis_limit")
+        db.execute("INSERT INTO analyses (id,status,metadata,created,updated,owner_id) VALUES (?,?,?,?,?,?)", (job_id, "awaiting_upload", json.dumps(metadata), now, now, owner_id))
     return job_id
 
 

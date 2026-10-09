@@ -10,19 +10,23 @@ from api.schemas import Findings, MatchInput
 from api.worker import process
 from api.provider import ProviderError
 
-TOKEN = "test-token-only-not-a-real-secret-123456"
-HEADERS = {"Authorization": f"Bearer {TOKEN}"}
+HEADERS = {}
 META = {"title": "Test highlights", "authorised": True, "provider_processing_consent": True}
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA", tmp_path)
-    monkeypatch.setenv("TSI_ACCESS_TOKEN", TOKEN)
+    monkeypatch.setenv("TSI_REGISTRATION_ENABLED", "true")
+    monkeypatch.setenv("TSI_APP_ORIGIN", "https://testserver")
+    monkeypatch.setenv("TSI_COOKIE_SECURE", "true")
     monkeypatch.setenv("GEMINI_API_KEY", "test-placeholder")
     monkeypatch.setenv("TSI_GEMINI_MODEL", "test-model")
     monkeypatch.setenv("TSI_PROVIDER_TERMS_ACCEPTED", "true")
-    with TestClient(app) as value:
+    with TestClient(app, base_url="https://testserver") as value:
+        registered = value.post("/v1/auth/register", json={"username": "analyst", "password": "test-password-1234"})
+        assert registered.status_code == 201
+        value.headers["X-TSI-CSRF"] = registered.json()["csrf_token"]
         yield value
 
 
@@ -33,7 +37,8 @@ def create(client):
 
 
 def test_token_required(client):
-    assert client.get("/v1/analyses").status_code == 401
+    with TestClient(app, base_url="https://testserver") as anonymous:
+        assert anonymous.get("/v1/analyses").status_code == 401
     assert client.get("/v1/analyses", headers=HEADERS).status_code == 200
 
 
@@ -163,3 +168,92 @@ def test_provider_sdk_adapter(client, monkeypatch, tmp_path):
     result = GeminiProvider().analyse(tmp_path / "test.mp4")
     assert result.events == []
     assert calls == ["upload", "analyse", "delete", "close"]
+
+
+def test_password_and_session_storage(client):
+    with store.connection() as db:
+        password = db.execute("SELECT password_hash FROM users").fetchone()[0]
+        stored_token = db.execute("SELECT token_hash FROM sessions").fetchone()[0]
+    assert password.startswith("$argon2id$")
+    assert "test-password-1234" not in password
+    cookie = client.cookies.get("tsi_session")
+    assert stored_token != cookie
+    assert len(stored_token) == 64
+
+
+def test_logout_revokes_session(client):
+    cookie = client.cookies.get("tsi_session")
+    assert client.post("/v1/auth/logout").status_code == 204
+    client.cookies.set("tsi_session", cookie)
+    assert client.get("/v1/auth/me").status_code == 401
+
+
+def test_expired_session(client):
+    with store.connection() as db:
+        db.execute("UPDATE sessions SET expires=?", (time.time() - 1,))
+    assert client.get("/v1/auth/me").status_code == 401
+
+
+def test_csrf_and_origin(client):
+    csrf = client.headers.pop("X-TSI-CSRF")
+    assert client.post("/v1/analyses", json=META).status_code == 403
+    client.headers["X-TSI-CSRF"] = csrf
+    assert client.post("/v1/analyses", json=META, headers={"Origin": "https://attacker.invalid"}).status_code == 403
+    assert client.post("/v1/auth/login", json={"username": "analyst", "password": "test-password-1234"}, headers={"Origin": "https://attacker.invalid"}).status_code == 403
+
+
+def test_account_isolation_and_video_ranges(client):
+    job_id = create(client)
+    store.transition(job_id, "awaiting_upload", "queued", duration=1, sha256="test")
+    path = config.DATA / f"{job_id}.mp4"
+    path.write_bytes(bytes(range(64)))
+    response = client.get(f"/v1/analyses/{job_id}/video", headers={"Range": "bytes=0-15"})
+    assert response.status_code == 206
+    assert response.content == bytes(range(16))
+    assert response.headers["content-range"] == "bytes 0-15/64"
+    assert "no-store" in response.headers["cache-control"]
+    assert client.head(f"/v1/analyses/{job_id}/video").status_code == 200
+    assert client.get(f"/v1/analyses/{job_id}/video", headers={"Range": "bytes=100-200"}).status_code == 416
+    with TestClient(app, base_url="https://testserver") as other:
+        registered = other.post("/v1/auth/register", json={"username": "another", "password": "another-password-1234"})
+        other.headers["X-TSI-CSRF"] = registered.json()["csrf_token"]
+        assert other.get("/v1/analyses").json() == []
+        for suffix in ("", "/video", "/report"):
+            assert other.get(f"/v1/analyses/{job_id}{suffix}").status_code == 404
+        assert other.put(f"/v1/analyses/{job_id}/video", content=b"x", headers={"Content-Type": "video/mp4"}).status_code == 404
+    assert len(client.get("/v1/analyses").json()) == 1
+
+
+def test_login_limit(client):
+    for _ in range(10):
+        assert client.post("/v1/auth/login", json={"username": "analyst", "password": "wrong-password-1234"}).status_code == 401
+    assert client.post("/v1/auth/login", json={"username": "analyst", "password": "test-password-1234"}).status_code == 429
+
+
+def test_login_cookie_flags(client):
+    response = client.post("/v1/auth/login", json={"username": "analyst", "password": "test-password-1234"})
+    assert response.status_code == 200
+    header = response.headers["set-cookie"].lower()
+    assert "httponly" in header and "secure" in header and "samesite=strict" in header
+    assert "password" not in response.json()["user"]
+
+
+def test_registration_disabled(client, monkeypatch):
+    monkeypatch.setenv("TSI_REGISTRATION_ENABLED", "false")
+    assert client.post("/v1/auth/register", json={"username": "newuser", "password": "test-password-1234"}).status_code == 403
+
+
+def test_per_account_limit(client):
+    for _ in range(5):
+        create(client)
+    response = client.post("/v1/analyses", json=META)
+    assert response.status_code == 429
+    assert response.json()["detail"]["code"] == "account_analysis_limit"
+
+
+def test_legacy_rows_not_assigned_to_new_users(client):
+    with store.connection() as db:
+        db.execute("INSERT INTO analyses (id,status,metadata,created,updated) VALUES (?,?,?,?,?)", ("00000000-0000-0000-0000-000000000001", "awaiting_upload", "{}", time.time(), time.time()))
+    store.init()
+    assert client.get("/v1/analyses").json() == []
+    assert client.get("/v1/analyses/00000000-0000-0000-0000-000000000001").status_code == 404

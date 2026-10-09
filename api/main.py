@@ -1,48 +1,38 @@
 import asyncio
 import hashlib
-import os
-import secrets
 from contextlib import asynccontextmanager
 from uuid import UUID
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import PlainTextResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.responses import FileResponse, PlainTextResponse
 from api import config, store
+from api.auth import current_user, router as auth_router
 from api.schemas import MatchInput
 from api.video import VideoError, probe
 
 ERRORS = {
     "provider_not_configured": "Configure a server-side provider key and model before submitting footage.",
     "provider_terms_not_accepted": "Review provider billing and footage-handling terms, then enable processing explicitly.",
+    "account_analysis_limit": "This account has reached its five-analysis development limit.",
     "storage_limit": "This development instance has reached its 20-analysis storage limit.",
 }
 
 
 @asynccontextmanager
 async def lifespan(app):
-    if len(os.getenv("TSI_ACCESS_TOKEN", "")) < 32:
-        raise RuntimeError("Set TSI_ACCESS_TOKEN to a random secret of at least 32 characters.")
     store.init()
     yield
 
 
 app = FastAPI(title="TSI API", version=config.PIPELINE_VERSION, lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
-security = HTTPBearer(auto_error=False)
+app.include_router(auth_router)
 
-
-def auth(credentials: HTTPAuthorizationCredentials | None = Depends(security)):
-    expected = os.getenv("TSI_ACCESS_TOKEN", "")
-    if not expected or not credentials or not secrets.compare_digest(credentials.credentials, expected):
-        raise HTTPException(401, detail={"code": "unauthorised", "message": "A valid development access token is required."})
-
-
-def job(job_id):
+def job(job_id, owner_id):
     try:
         UUID(job_id)
     except ValueError:
         raise HTTPException(404, "Analysis not found")
     item = store.get(job_id)
-    if not item:
+    if not item or item["owner_id"] != owner_id:
         raise HTTPException(404, "Analysis not found")
     return item
 
@@ -52,25 +42,25 @@ def health():
     return {"status": "ok", "version": config.PIPELINE_VERSION}
 
 
-@app.get("/v1/capabilities", dependencies=[Depends(auth)])
-def capabilities():
-    return {"sources": ["mp4_upload"], "url_ingestion": False, "max_bytes": config.MAX_BYTES, "max_seconds": config.MAX_SECONDS, "movement_tracking": False, "account_authentication": False}
+@app.get("/v1/capabilities")
+def capabilities(user=Depends(current_user)):
+    return {"sources": ["mp4_upload"], "url_ingestion": False, "max_bytes": config.MAX_BYTES, "max_seconds": config.MAX_SECONDS, "movement_tracking": False, "account_authentication": True}
 
 
-@app.post("/v1/analyses", status_code=201, dependencies=[Depends(auth)])
-def create(metadata: MatchInput):
+@app.post("/v1/analyses", status_code=201)
+def create(metadata: MatchInput, user=Depends(current_user)):
     try:
         config.provider_config()
-        job_id = store.create(metadata.model_dump())
+        job_id = store.create(metadata.model_dump(), user["id"])
     except RuntimeError as exc:
         code = str(exc)
-        raise HTTPException(429 if code == "storage_limit" else 503, detail={"code": code, "message": ERRORS.get(code, "Configuration unavailable.")})
+        raise HTTPException(429 if code in ("storage_limit", "account_analysis_limit") else 503, detail={"code": code, "message": ERRORS.get(code, "Configuration unavailable.")})
     return {"id": job_id, "status": "awaiting_upload", "upload_path": f"/v1/analyses/{job_id}/video"}
 
 
-@app.put("/v1/analyses/{job_id}/video", status_code=202, dependencies=[Depends(auth)])
-async def upload(job_id: str, request: Request):
-    job(job_id)
+@app.put("/v1/analyses/{job_id}/video", status_code=202)
+async def upload(job_id: str, request: Request, user=Depends(current_user)):
+    job(job_id, user["id"])
     if request.headers.get("content-type", "").split(";")[0] != "video/mp4":
         raise HTTPException(415, detail={"code": "unsupported_source", "message": "Send an authorised MP4 file as video/mp4. URLs and multipart uploads are not supported yet."})
     if not store.transition(job_id, "awaiting_upload", "uploading"):
@@ -106,21 +96,21 @@ async def upload(job_id: str, request: Request):
             store.transition(job_id, "uploading", "failed", error=error_code)
 
 
-@app.get("/v1/analyses", dependencies=[Depends(auth)])
-def listing():
+@app.get("/v1/analyses")
+def listing(user=Depends(current_user)):
     with store.connection() as db:
-        rows = db.execute("SELECT id,status,created,error FROM analyses ORDER BY created DESC").fetchall()
+        rows = db.execute("SELECT id,status,created,error FROM analyses WHERE owner_id=? ORDER BY created DESC", (user["id"],)).fetchall()
     return [dict(row) for row in rows]
 
 
-@app.get("/v1/analyses/{job_id}", dependencies=[Depends(auth)])
-def detail(job_id: str):
-    return job(job_id)
+@app.get("/v1/analyses/{job_id}")
+def detail(job_id: str, user=Depends(current_user)):
+    return job(job_id, user["id"])
 
 
-@app.get("/v1/analyses/{job_id}/report", response_class=PlainTextResponse, dependencies=[Depends(auth)])
-def report(job_id: str):
-    item = job(job_id)
+@app.get("/v1/analyses/{job_id}/report", response_class=PlainTextResponse)
+def report(job_id: str, user=Depends(current_user)):
+    item = job(job_id, user["id"])
     if item["status"] != "completed":
         raise HTTPException(409, "Analysis has not completed.")
     result = item["result"]
@@ -131,3 +121,15 @@ def report(job_id: str):
     for claim in result["interpretations"]:
         lines.append(f"{claim['section']}: {claim['text']} [Evidence: {', '.join(claim['evidence_ids'])}]")
     return "\n".join(lines)
+
+
+@app.api_route("/v1/analyses/{job_id}/video", methods=["GET", "HEAD"])
+def playback(job_id: str, user=Depends(current_user)):
+    item = job(job_id, user["id"])
+    path = config.DATA / f"{job_id}.mp4"
+    if item["status"] not in ("queued", "processing", "completed") or not path.is_file():
+        raise HTTPException(404, "Video unavailable")
+    return FileResponse(path, media_type="video/mp4", headers={
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+    })
