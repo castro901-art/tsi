@@ -1,123 +1,117 @@
-# TSI product requirements
+# Product requirements
 
-This document consolidates the founder's development brief. All features below are requirements, not statements of implementation.
+## Product
 
-## Identity and audience
+TSI (Trendify Sports Intelligence) is a Trendify Labs product for football pundits, independent analysts, journalists, content creators, coaches and enthusiasts. The initial competition focus is Kenyan football, including the FKF Premier League.
 
-- Company: Trendify Labs.
-- Product: TSI (Trendify Sports Intelligence).
-- Tagline: Understand the game beyond the score.
-- Initial users: football pundits, independent analysts, sports journalists, content creators, coaches and enthusiasts.
-- Initial competition focus: Kenyan football, including the FKF Premier League.
-- Platforms: responsive mobile and desktop web; no native Android app required. Evaluate PWA installation if appropriate.
+**Tagline:** Understand the game beyond the score.
 
-## Vision
+Build a self-service, responsive web studio that analyses legally accessible match highlights. Users should not need specialist equipment, stadium cameras or professional analysis software. Video analysis must be real, not a report generated from match metadata alone.
 
-Provide real video analysis of legally accessible highlights without specialist equipment, stadium cameras, professional analysis software or advanced data expertise. Do not substitute generic prompted commentary for actual video understanding.
+## User workflow
 
-## Primary journey
+Open TSI, select Analyse a Match, upload authorised footage or submit a supported URL, review source limitations and start analysis. Show processing status, candidate events and timestamped evidence. Allow metadata correction before final report generation.
 
-1. Open TSI and choose Analyse a Match.
-2. Paste a supported video URL or upload authorised footage.
-3. Validate the source, permissions and technical constraints; explain highlight limitations.
-4. Start asynchronous analysis and display progress.
-5. Extract candidate events and observations.
-6. Explore results, timestamped evidence and clips only where permitted.
-7. Open movement review for supported sequences, pause/scrub, and inspect reliable detections.
-8. Select a player and create an alternative position or run destination where confidence permits.
-9. Compare original movement with the user's hypothetical overlay; never alter original evidence.
-10. Ask evidence-grounded follow-up questions within the same analysis.
-11. Correct metadata, review findings, then save, export or share the report and supported scenarios.
+Users can review supported movement sequences, pause and scrub, select players and create alternative positions or runs. Original evidence and user adjustments remain separate. Users can ask follow-up questions and save, revisit, share or export reports and supported scenarios.
 
-Persist signed-in analyses. Provide a sensible guest/trial path if supported by the selected architecture, with enforced usage limits. A club account or institutional subscription must not be required to try the core workflow.
+Persist signed-in analyses. Provide a bounded guest/trial workflow where the architecture supports it, without requiring a club account or institutional subscription.
 
 ## Match Analysis Studio
 
-Provide URL/upload inputs, title, optional teams, competition and date where known, analysis type selection, progress, results, metadata correction, save and export controls. Mobile must be first-class: single-column flow, large touch targets, readable reports and lightweight visualisations. Desktop can place video, timeline and report side by side.
+Include URL/upload input, title, optional team names, competition and match date where known, analysis type, progress, results and save/export controls. Explain supported sources and limitations before processing.
 
-## Video understanding and candidate events
+Mobile: single-column flow, readable reports, large touch targets, lightweight timelines, easy copying/sharing and simplified positioning controls. Desktop: video, timeline and report alongside one another where practical, with a larger review canvas and optional side-by-side movement comparisons. Evaluate an installable PWA; no native Android app is required initially.
 
-Use a configurable provider; evaluate the current Gemini free tier and practical open-weight alternatives before selection. Identify candidate goals/scoring sequences, shots, saves, corners, free kicks, combinations, counterattacks, visible defensive errors, set pieces and supported player movements. Every finding needs a timestamp/video reference when available. Distinguish direct observations from model interpretations.
+## Highlight analysis
 
-Do not assume public URLs are processable. Maintain an explicit ingestion support matrix. Respect platform terms, copyright, access controls and permitted ingestion methods; never bypass restrictions.
+Use a provider-independent interface. Evaluate Gemini's current free tier and practical open-weight alternatives. Start with one supported provider.
 
-## Tactical report
+Extract candidate goals and scoring sequences, shots, saves, corners, free kicks, attacking combinations, counterattacks, visible defensive errors, selected set pieces and supported player movement. Findings need timestamped references where available. Separate visible observations from inferred interpretations.
 
-- Attacking: visible development, progression, wide play, combinations, chance creation, finishing, runs, positioning and possible alternatives.
-- Defensive: visible actions, marking/positioning problems, transitions, errors leading to chances and alternative coverage.
-- Set pieces: visible routines, deliveries, finishing and questions for further investigation; optional movement review.
-- Match interpretation: supported turning points, strengths, weaknesses, alternative explanations and unresolved questions.
+Do not assume public URLs are downloadable or accepted by a provider. Use supported ingestion methods and respect copyright, platform terms and access controls. Never bypass restrictions.
 
-Never infer unseen match periods as historical fact. Separate what happened from what might have happened under a user adjustment.
+## Tactical reports
+
+Organise reports into:
+
+- **Attacking:** development of visible attacks, progression, wide play, combinations, chance creation, finishing, runs and positioning options.
+- **Defensive:** visible actions, marking or positioning problems, transitions, errors leading to chances and alternative coverage.
+- **Set pieces:** visible routines, delivery and finishing patterns, unresolved questions and optional positioning review.
+- **Match interpretation:** supported turning points, strengths, weaknesses, alternative interpretations and what the footage cannot resolve.
+
+Keep actual events separate from possible consequences of user adjustments. Do not claim to know unseen match periods.
 
 ## Pundit Mode
 
-A core differentiator, generating grounded editorial material rather than generic commentary. Formats: five talking points; tactical breakdown; a qualified discussion of why a match was won/lost; player observations; controversial decisions needing review; pre/post-match notes; podcast questions; video script outline; short social posts; alternative movement/coaching discussion points.
+Turn analysis into useful editorial material. Support five talking points, tactical breakdowns, qualified discussions of why a match was won or lost, player observations, decisions needing further review, pre/post-match notes, podcast questions, video-script outlines, short social posts and alternative-movement discussion points.
 
-Every factual claim must reference verified event data or an identified source. Candidate observations must stay explicitly unverified. Never invent quotations, referee decisions, player identities or statistics. Inconclusive footage must remain inconclusive. Pre-match notes require separately sourced information where the analysed footage cannot establish it.
+Ground factual claims in verified events or identified sources. Keep unverified candidate observations explicitly labelled. Do not invent quotations, referee decisions, identities or statistics. Explain inconclusive footage. Pre-match context requires separate sources where the footage cannot establish it.
 
 ## Ask the Match
 
-Retrieve relevant stored events and evidence before answering. Preserve conversation context without resubmitting footage. Support questions about important sequences, chance development, defensive mistakes, reasonable conclusions, talking points, unavailable evidence and alternative runs/positions. Every response must separate observations, interpretations and user-created hypothetical scenarios.
+Retrieve relevant stored events and evidence before answering. Keep conversation context so follow-up questions do not require resubmission. Support questions about attacking sequences, chance development, defensive errors, reasonable conclusions, talking points, unavailable evidence and alternative positioning or timing.
 
-## Timeline and review
+Cite evidence and distinguish observations, interpretations and user-created hypothetical scenarios in every answer.
 
-Each event shows timestamp, type, explanation, verified team/player identity only where justified, confidence/verification status, supported source link and reliable movement information. Users can mark findings correct, incorrect or uncertain; retain review provenance.
+## Evidence timeline
 
-For supported sequences: pause and scrub frames or intervals; show markers/paths only at sufficient confidence; select a player; drag an alternative position or draw a run; compare original/hypothetical overlays; annotate (e.g. run earlier, hold width, drop deeper, attack near post, cover passing lane); save/name/share scenarios where supported. Provide simplified mobile positioning controls and larger desktop/side-by-side views where practical.
+Each finding includes timestamp, type, explanation, verified identity where available, confidence/verification status, supported source link and reliable movement information. Let users mark findings correct, incorrect or uncertain and retain review history.
 
-Store evidence and scenarios separately. Explain that this is a tactical/coaching exercise, not proof of an outcome. Qualitative consequences may describe possible passing options, space or coverage but not certain outcomes. Do not imply physics simulation unless implemented. Camera cuts, occlusion, kit similarity, low quality, cropping and uncertain identities constrain tracking; avoid precise-looking unreliable paths.
+Only offer downloadable clips with permission and implemented technical support; otherwise provide timestamped source references.
 
-Download clips only with permission and implemented technical capability. Otherwise provide supported timestamped source references.
+## Movement review
 
-## Persistence, export and access
+For supported sequences, provide pause/scrub controls and detected-player markers, silhouettes or tracking points. Show paths only where confidence supports them. Let users select a player, drag an alternative position or draw a run, annotate the adjustment and compare original and hypothetical movement without changing the video.
 
-Save/revisit analyses; PDF report export; copy talking points; access-controlled share links; structured event export; supported scenario/annotation export. Reports include source, analysis date, limitations and verification status. All shared/exported hypothetical movements must retain conspicuous labels. Guest data must have clear retention/expiry; signed-in resources need ownership enforcement.
+Annotations may include run earlier, hold width, drop deeper, attack the near post and cover the passing lane. Allow naming, saving and sharing scenarios where supported.
 
-## Architecture boundaries
+Tracking can fail across camera cuts, occlusion, similar kits, low quality and cropped footage. Show uncertainty; do not draw precise-looking unreliable paths or assume player identity.
 
-Separate ingestion, video understanding, player/object detection, movement tracking, event extraction, validation, evidence storage, tactical interpretation, hypothetical scenario storage/interpretation, report generation, conversational retrieval and export/sharing. Start with one supported provider behind a replaceable interface.
+A scenario is a tactical/coaching exercise, not evidence of what happened or proof of what would happen. Qualitative interpretation may discuss possible passing options, space or coverage. Never assert a certain result or imply physics simulation without an implemented, validated simulation.
 
-### Candidate event data
+## Reports and access
 
-Match ID; event type; start/end timestamps; team/player identifiers only where verified; description; confidence; source reference; verification status; model and pipeline versions; positions/paths where available; tracking confidence; occlusion status. Store observation versus interpretation explicitly. Preserve timestamp basis, evidence provenance and review history.
+Save and reopen analyses. Export PDF reports and structured event data, copy talking points, and share reports with appropriate access controls. Export scenarios/annotations where supported.
 
-### Hypothetical scenario data
+Include source footage reference, analysis date, limitations and verification status in exports. Keep hypothetical labels in shared/exported scenarios. Enforce ownership and define guest retention/expiry.
 
-Scenario ID; match ID; source event ID; selected player; original position/path; adjusted position/path; timestamp range; annotations; generated interpretation; explicit hypothetical status; creator; creation date. Original evidence is immutable relative to scenario editing.
+## Data and service boundaries
 
-## Cost and security
+Separate ingestion, video understanding, object detection, movement tracking, event extraction, validation, evidence storage, tactical interpretation, scenario storage/interpretation, report generation, conversational retrieval and export/sharing.
 
-Evaluate free quotas AND commercial/data-processing terms. Support practical local/open-weight inference where suitable. Bound duration, size and concurrency; cache only where permitted; avoid repeated work; use asynchronous jobs and transparent failures. Prioritise selected-sequence tracking rather than full-match tracking. Gate advanced review by confidence and capacity. No unlimited-free promise or silent paid fallback. Explicit approval precedes paid services. Never put API keys in browser bundles, commits or logs.
+**Candidate event:** match ID, event type, start/end times, verified team/player identifiers where available, description, confidence, source reference, verification status, model/pipeline version, optional positions/paths, tracking confidence and occlusion. Record timestamp basis, observation versus interpretation and review provenance.
 
-## Honest boundaries
+**Hypothetical scenario:** scenario ID, match ID, source event ID, selected player, original position/path, adjusted position/path, time range, annotations, generated interpretation, explicit hypothetical status, creator and creation date. Scenario editing cannot overwrite original evidence.
 
-No full-match possession, complete passing networks, player heatmaps, formations or comprehensive pressing claims from incomplete highlights without adequate footage or a separately verified source. Clearly label direct observations, model interpretations, human verification, detected movements, hypothetical movements and unknowns. Important findings require appropriate human review before being presented as established facts.
+## Cost, safety and analytical limits
 
-## Repository change rules
+Verify free quotas, commercial terms and data-handling policies. Bound duration, size, concurrency and guest usage. Cache reusable results only where permitted. Use asynchronous jobs and transparent source/quota/failure messages. Track selected sequences rather than full matches by default; gate advanced review by confidence and capacity.
 
-Before changes, inspect structure/framework/backend/database/authentication; reuse conventions; preserve unrelated routes/features. This new repository initially contains only a README, so there is no application stack to replace. Do not replace the existing website. Build the smallest complete working flow, not a static mockup or fake progress/results. Increment movement review from real position overlays and pause/scrub controls to editable alternatives only after tracking, persistence and rendering are reliable.
+Never silently switch to paid APIs, promise unlimited free analysis or introduce paid services without approval. Keep secrets out of browser code, commits and logs.
 
-## MVP acceptance checklist
+Do not claim full-match possession, complete passing networks, heatmaps, formations or comprehensive pressing analysis from incomplete highlights without adequate footage or separately verified data. Label direct observations, model interpretations, human-verified events, detected movement, hypothetical movement and unavailable information. Important claims require appropriate review.
 
-All unchecked until implemented and validated:
+## Development approach
+
+Inspect the current code before changes, reuse conventions and preserve unrelated features. Build the smallest complete working workflow; no fake processing or fabricated results. Add real timestamped movement overlays first, then editable positions and paths after tracking, persistence and rendering are reliable.
+
+## MVP acceptance criteria
 
 - [ ] 1. Open TSI on phone and laptop.
 - [ ] 2. Submit authorised highlights.
 - [ ] 3. Run real analysis through a configured provider.
-- [ ] 4. View extracted events with evidence.
+- [ ] 4. View events with evidence.
 - [ ] 5. Read a tactical report with explicit limitations.
 - [ ] 6. Generate grounded Pundit Mode discussion points.
 - [ ] 7. Ask follow-ups about the same match.
 - [ ] 8. Save and revisit a report.
 - [ ] 9. Export or share analysis.
 - [ ] 10. Understand source/quota/processing failures.
-- [ ] 11. Open at least one reliably supported movement sequence.
-- [ ] 12. Pause/scrub with real detected positions or paths.
-- [ ] 13. Select a player and create an alternative position/run destination where confidence permits.
+- [ ] 11. Open at least one supported movement sequence.
+- [ ] 12. Pause/scrub with detected positions or paths.
+- [ ] 13. Select a player and create an alternative position or run destination where confidence permits.
 - [ ] 14. Compare original and hypothetical movement.
-- [ ] 15. See unambiguous observed/hypothetical labels.
+- [ ] 15. See clear observed/hypothetical labels.
 - [ ] 16. Save or export a supported scenario.
-- [ ] Test on representative real football highlights, including Kenyan-football footage where authorised, before release.
 
-Final priority: validate the full responsive analyst/pundit workflow first. Advanced tracking, full-match modelling and league-wide intelligence follow only when data and capacity justify them.
+Validate the full workflow on representative real, authorised football highlights before release. Expand into advanced tracking, full-match tactical modelling and league-wide intelligence only when the data and technical capacity are available.

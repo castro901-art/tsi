@@ -1,56 +1,45 @@
-# TSI implementation plan
+# Implementation plan
 
-## Status and inspected baseline
+## Architecture
 
-Planning only. The new public `castro901-art/tsi` repository was inspected after creation and contained only GitHub's initial README. No frontend, backend, database or authentication exists here to reuse. The existing `tiff-website` root contains static HTML and assets; deeper integrations and brand assets have not yet been audited. It will not be modified by this project setup.
+- React and TypeScript for the responsive studio.
+- FastAPI for ingestion, analysis jobs and evidence APIs.
+- A background worker for provider requests and selected-sequence tracking.
+- SQLite and local file storage during development; replaceable persistence adapters for hosting.
+- Provider interfaces separating video understanding, detection, tracking and report generation.
 
-## Proposed stack — not installed or deployed
+Hosted authentication and storage will be selected after reviewing their limits and terms. Gemini is the first video-understanding adapter to evaluate; model availability, free-tier eligibility, commercial terms and footage handling need verification before live use. Open-weight alternatives require their own licence and compute review.
 
-- Responsive TypeScript/React web client with accessible video/timeline components.
-- Python/FastAPI backend for uploads, validated schemas, provider adapters and evidence APIs.
-- Separate asynchronous worker for video-understanding and selected-sequence detection/tracking; API requests must not block for long jobs.
-- SQLite and filesystem storage for initial local development; configurable database/object-storage adapters for later hosting.
-- Choose hosted authentication/storage only after reviewing free-tier terms, resource limits and explicit approval for any paid use. Do not invent authentication endpoints or ship placeholder login as working.
-- Gemini is an evaluation candidate, not a confirmed free production service. Verify current model availability, quotas, commercial terms, footage privacy/retention and regional availability. Open-weight alternatives also require weight/dependency licensing and compute review.
+## 1. Ingestion and analysis backend
 
-## Milestone 0: prerequisites and design
+Accept authorised uploads first. Validate container, video stream, size and duration; reject unsupported URLs explicitly. Store metadata and source provenance. Queue analysis, persist structured candidate events and expose real job status and failure codes.
 
-1. Inspect website assets if adopting brand conventions; do not copy unrelated routes or custom-domain settings.
-2. Define source support matrix. Start with authorised uploads. Add URL ingestion only through explicitly supported, compliant methods.
-3. Evaluate provider on representative authorised football highlights; record dated results, cost/quota terms and temporal accuracy. No service deployment or paid configuration without approval.
-4. Define schema validation and ownership model; choose auth implementation and bounded guest policy.
-5. Decide numeric upload/duration/guest/concurrency limits after measurements; enforce them server-side. Decide tracking-confidence gates using validation, not arbitrary precision claims.
+Validate provider output against the schema and actual video duration. Store observations separately from interpretations. Model output starts unverified, regardless of its confidence score. Retain model and pipeline versions.
 
-## Milestone 1: real vertical slice
+Keep credentials server-side. Bound upload size, duration, queue depth and concurrency. Do not retry quota failures through another paid service. URL ingestion requires an approved support matrix, platform compliance and SSRF protection.
 
-Implement responsive submission -> source validation -> queued job -> actual provider analysis -> structured timestamped candidate events -> persisted results -> evidence timeline -> limited tactical report. Correct metadata before final generation. Display real job transitions (`queued`, `processing`, `completed`, `failed`), not timed fake progress. Preserve failure codes for unsupported source, permissions, invalid file, timeout, provider quota and model failure. Never retry quota failures by enabling paid services.
+## 2. Studio and evidence review
 
-Validate file contents/container and duration, not just extension. Use size limits, request throttling, isolated worker directories and timeouts. Restrict URL adapters to approved schemes/hosts and guard SSRF, redirects/private networks. Store secrets only on the server. Do not commit or retain unauthorised footage.
+Build a mobile-first submission and results flow. Connect video playback to a timestamped event timeline. Allow metadata correction and correct/incorrect/uncertain event review with audit history. Generate a report whose claims refer to stored evidence and whose limitations remain visible.
 
-## Milestone 2: review and editorial workflow
+Add tested resource ownership, a bounded guest path and signed-in persistence. Users should not need a club subscription. Add report reopening, structured export, PDF export and access-controlled sharing with revocation.
 
-Add correct/incorrect/uncertain review with audit history, source citations and observation/interpretation labels. Pundit formats consume stored evidence; Ask the Match retrieves events and relevant ranges, retains contextual turns and cites evidence. Candidate material must not become verified merely because a model repeated it. Lack of evidence produces an uncertainty response, not a fabricated answer.
+## 3. Pundit Mode and Ask the Match
 
-Persist signed-in analyses with tested authentication and resource ownership; trial access must not require a club subscription. Support reopen, metadata correction and revision-aware reports. Add copy talking points, structured JSON export, printable/PDF report export and scoped sharing with revocation and appropriate expiry. Exports retain all limitations and provenance. Persist report summaries separately from original structured evidence.
+Generate editorial formats from the analysed evidence. Retrieve relevant events before answering questions and retain conversation context. Cite source ranges, retain verification labels and explain missing evidence. A repeated model claim does not become a verified fact.
 
-## Milestone 3: selected-sequence movement review
+## 4. Movement review
 
-Implement actual detection and short-sequence tracking through a separate adapter. Benchmark identity switches, camera cuts and occlusions. Use normalized image coordinates for image overlays; do not label them pitch metres without calibrated mapping. Break tracks at unsupported cuts and hide uncertain paths. Player marker labels can be anonymous track IDs; do not imply verified names.
+Detect and track players in selected short sequences. Measure camera-cut handling, occlusion and identity switches before exposing paths. Use anonymous track labels unless identity is verified. Image coordinates are not pitch metres without calibration.
 
-First ship synchronized position overlays with pause/scrub controls. Then add confidence-gated player selection, alternative positions/run paths, annotations and original-versus-hypothetical comparison. Mobile uses touch targets and a simplified run-destination editor. Persist scenario versions and creator access independently of evidence. Qualitative interpretation must explicitly say hypothetical; no asserted probability or physical outcome without an implemented, validated model.
+Start with real position overlays and pause/scrub controls. Then add player selection, alternative positions, run paths and annotations where tracking is reliable. Preserve original observations separately from saved scenarios. Mobile gets a simplified destination editor; desktop can support detailed comparisons.
 
-## Milestone 4: end-to-end release gate
+Scenario interpretation is qualitative and hypothetical. Do not imply a physical simulation, certain outcome or calibrated probability without implementing and validating that capability.
 
-Run every acceptance criterion in PRODUCT_REQUIREMENTS.md against real authorised footage. Exercise mobile and desktop interactions, uploads, provider quotas, malformed timestamps, camera cuts, weak detections, auth ownership, share revocation, exports, prompt-injection attempts in metadata/evidence and missing evidence. Ensure report claims link to valid ranges. Test keys are never exposed in bundles/logs. Inspect public repository for secrets/media before publishing implementation commits.
+## Release checks
 
-Release only after a full user workflow passes, including at least one reliable movement-review sequence and saved/exported hypothetical scenario. Document measured limitations. Do not mark features complete from unit tests or mock fixtures alone.
+Complete the acceptance checklist in PRODUCT_REQUIREMENTS.md against authorised, representative football highlights, including Kenyan-football footage where available. Test mobile and desktop flows, upload limits, quota failures, invalid timestamps, weak tracking, ownership, share revocation and exports.
 
-## Proposed application boundaries
+Test injection attempts in metadata and provider output. Ensure credentials and footage never enter public commits or client bundles. Confirm factual report claims refer to valid evidence ranges. Unit tests with fixtures do not replace real-footage evaluation.
 
-`web/` client; `api/` endpoints and auth integration; `worker/` asynchronous jobs; `providers/` interchangeable understanding/detection/tracking interfaces; `schemas/` structured events, evidence and scenarios; `tests/` unit/integration/end-to-end validation. These are proposed directories, not existing code.
-
-Understanding adapters return structured candidate events and provider/model version. Tracking adapters return time-aligned positions, confidence, occlusion and continuity metadata. Validation checks ranges against actual source duration, schema conformance, evidence references and review provenance. Report/chat services retrieve evidence; scenario services cannot overwrite observed tracking.
-
-## Unresolved release dependencies
-
-Configured provider credentials; provider/free-tier terms evaluation; authorised evaluation footage; chosen auth/hosting solution; measured duration/size limits; verified tracking method and dependency/model licences. No paid service, unrestricted URL downloader, full-match statistics, league data integration or physics simulation is included by default.
+The release gate includes a saved or exported movement-review scenario and clear original/hypothetical labels. Advanced full-match modelling and league-wide intelligence follow only when data and capacity support them.
