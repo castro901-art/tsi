@@ -1,0 +1,34 @@
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# JavaScript and Python build/runtime files
+node_modules/
+dist/
+build/
+.next/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+coverage/
+# Local footage, evidence, persistence and logs
+uploads/
+media/
+artifacts/
+private-data/
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.sqlite
+*.sqlite3
+*.db
+*.log
+# Editor/system files
+.DS_Store
+.idea/
