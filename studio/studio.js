@@ -11,6 +11,29 @@ const labels = {
 let session = null, capabilities = null, selected = null, timer = null;
 let epoch = 0, busy = false, selectionVersion = 0, statusRequestVersion = 0, renderedResult = null;
 const pending = new Set();
+const registrationEnabled = document.body.dataset.registrationEnabled === "true";
+let authMode = registrationEnabled && document.body.dataset.authMode === "register" ? "register" : "login";
+let authBusy = false, logoutBusy = false;
+function configureAuth() {
+  const creating = authMode === "register";
+  $("auth-title").textContent = creating ? "Create your account" : "Sign in";
+  $("auth-description").textContent = creating ? "Create an account to save and revisit your football analyses." : "Continue to your match analyses.";
+  $("auth-submit").textContent = creating ? "Create account" : "Sign in";
+  $("auth-password").autocomplete = creating ? "new-password" : "current-password";
+  $("username-requirements").hidden = $("password-requirements").hidden = !creating;
+  $("register").hidden = creating || !registrationEnabled;
+  $("back-to-sign-in").hidden = !creating;
+  document.title = `TSI · ${creating ? "Create account" : "Sign in"}`;
+}
+configureAuth();
+function authErrorText(status) {
+  if (status === 401) return "The username or password is incorrect. Please try again.";
+  if (status === 403) return authMode === "register" ? "Account creation is unavailable. Return to sign in or contact the workspace owner." : "Sign-in could not be completed. Reload the page and try again.";
+  if (status === 409) return "That username is unavailable. Choose another.";
+  if (status === 422) return "Check your username and password requirements, then try again.";
+  if (status === 429) return "Too many attempts or account creation is temporarily limited. Please wait before trying again.";
+  return "Authentication is temporarily unavailable. Please try again later.";
+}
 const uuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 function message(id, text = "") { $(id).textContent = text; $(id).hidden = !text; }
 function errorText(data, status) {
@@ -32,12 +55,14 @@ async function api(path, options = {}) {
     const data = response.status === 204 ? null : await response.json();
     if (!response.ok) {
       if (response.status === 401 && session) { signOutLocally(); message("notice", "Your session expired. Sign in again to continue."); }
-      throw new Error(errorText(data, response.status));
+      const error = new Error(path.startsWith("/v1/auth/") ? authErrorText(response.status) : errorText(data, response.status));
+      error.status = response.status; throw error;
     }
     return data;
   } catch (e) {
     if (e.name === "AbortError") throw new Error("Request cancelled or timed out. Check the saved job status before resubmitting; its server state is unknown.");
-    if (e instanceof TypeError) throw new Error("Network unavailable. No results were substituted. Check status when the connection returns.");
+    if (e instanceof TypeError) throw new Error(path.startsWith("/v1/auth/") ? "Unable to connect. Check your connection and try again." : "Network unavailable. No results were substituted. Check status when the connection returns.");
+    if (e instanceof SyntaxError && path.startsWith("/v1/auth/")) throw new Error("Authentication is temporarily unavailable. Please try again later.");
     throw e;
   } finally { clearTimeout(deadline); pending.delete(controller); }
 }
@@ -55,6 +80,11 @@ function signOutLocally() {
   for (const c of pending) c.abort();
   clearReview(); $("review").hidden = true; $("workspace").hidden = true; $("auth").hidden = false;
   $("logout").hidden = true; $("username").textContent = "";
+  document.body.dataset.view = "auth"; $("hero").hidden = true;
+  $("auth-password").type = "password"; message("auth-error");
+  $("auth-name").removeAttribute("aria-invalid"); $("auth-password").removeAttribute("aria-invalid");
+  authMode = "login"; document.body.dataset.authMode = "login";
+  history.replaceState(null, "", "/studio"); configureAuth(); $("auth-name").focus();
   $("analyses").replaceChildren(); $("analysis-form").reset(); $("auth-password").value = "";
   setBusy(false);
 }
@@ -62,7 +92,7 @@ function setBusy(value) {
   busy = value; $("inputs").disabled = value;
   $("start").disabled = value || !capabilities;
   $("resume-upload").disabled = value || !capabilities;
-  $("logout").disabled = value;
+  $("logout").disabled = value || logoutBusy;
   for (const button of $("analyses").querySelectorAll("button")) button.disabled = value;
 }
 async function loadCapabilities() {
@@ -91,6 +121,9 @@ async function listAnalyses() {
 }
 async function enterWorkspace(data) {
   session = data; $("auth-password").value = "";
+  document.body.dataset.view = "workspace"; $("hero").hidden = false;
+  document.title = "TSI · Analysis Studio";
+  if (authMode === "register") history.replaceState(null, "", "/studio");
   $("auth").hidden = true; $("workspace").hidden = false; $("logout").hidden = false;
   $("username").textContent = data.user.username; message("notice");
   await loadCapabilities(); await listAnalyses();
@@ -190,14 +223,44 @@ async function uploadFile(id, file) {
   await api(`/v1/analyses/${id}/video`, {method: "PUT", headers: {"Content-Type": "video/mp4"}, body: file});
 }
 $("auth-form").addEventListener("submit", async event => {
-  event.preventDefault(); const buttons = [...$("auth-form").querySelectorAll("button")];
-  buttons.forEach(b => b.disabled = true); message("notice");
-  try { await enterWorkspace(await api(`/v1/auth/${event.submitter?.id === "register" ? "register" : "login"}`, jsonOptions("POST", {username: $("auth-name").value.trim(), password: $("auth-password").value}))); }
-  catch (e) { message("notice", e.message); } finally { buttons.forEach(b => b.disabled = false); }
+  event.preventDefault(); if (authBusy) return;
+  message("auth-error"); message("notice");
+  const name = $("auth-name"), password = $("auth-password"), username = name.value.trim();
+  name.removeAttribute("aria-invalid"); password.removeAttribute("aria-invalid");
+  if (!/^[a-z0-9_]{3,40}$/.test(username)) {
+    message("auth-error", "Enter a username with 3–40 lowercase letters, numbers or underscores.");
+    name.setAttribute("aria-invalid", "true"); name.focus(); return;
+  }
+  const passwordLength = [...password.value].length;
+  if (passwordLength < 12 || passwordLength > 128) {
+    message("auth-error", "Enter a password with 12–128 characters.");
+    password.setAttribute("aria-invalid", "true"); password.focus(); return;
+  }
+  if (authMode === "register" && !registrationEnabled) return;
+  authBusy = true; $("auth-inputs").disabled = true;
+  $("auth-form").setAttribute("aria-busy", "true");
+  $("auth-submit").textContent = authMode === "register" ? "Creating account…" : "Signing in…";
+  for (const a of $("auth-links").querySelectorAll("a")) a.setAttribute("aria-disabled", "true");
+  try {
+    const data = await api(`/v1/auth/${authMode}`, jsonOptions("POST", {username, password: password.value}));
+    await enterWorkspace(data);
+  } catch (e) {
+    if (session) message("notice", e.message);
+    else { message("auth-error", e.message); password.value = ""; password.focus(); }
+  } finally {
+    authBusy = false; $("auth-inputs").disabled = false; $("auth-form").removeAttribute("aria-busy");
+    $("auth-submit").textContent = authMode === "register" ? "Create account" : "Sign in";
+    for (const a of $("auth-links").querySelectorAll("a")) a.removeAttribute("aria-disabled");
+  }
 });
+for (const link of $("auth-links").querySelectorAll("a")) link.addEventListener("click", e => { if (authBusy) e.preventDefault(); });
+for (const id of ["auth-name", "auth-password"]) $(id).addEventListener("input", () => { $(id).removeAttribute("aria-invalid"); message("auth-error"); });
 $("logout").addEventListener("click", async () => {
+  if (logoutBusy || busy) return;
+  logoutBusy = true; $("logout").disabled = true; $("logout").textContent = "Signing out…";
   try { await api("/v1/auth/logout", {method: "POST"}); signOutLocally(); message("notice"); }
   catch (e) { message("notice", e.message); }
+  finally { logoutBusy = false; $("logout").disabled = busy; $("logout").textContent = "Sign out"; }
 });
 $("refresh").addEventListener("click", async () => {
   try { message("notice"); if (!capabilities) await loadCapabilities(); await listAnalyses(); }
@@ -233,5 +296,11 @@ $("resume-upload").addEventListener("click", async () => {
   finally { setBusy(false); if (session) await checkJob(); }
 });
 $("video").addEventListener("error", () => { $("video-note").textContent = "Source playback unavailable or unsupported by this browser. No substitute video is shown."; });
+authBusy = true; $("auth-inputs").disabled = true;
+$("auth-form").setAttribute("aria-busy", "true"); $("auth-submit").textContent = "Checking session…";
 try { await enterWorkspace(await api("/v1/auth/me")); }
-catch (e) { if (e.message !== "Sign in to continue") message("notice", e.message); }
+catch (e) { if (e.status !== 401) message("notice", e.message); }
+finally {
+  authBusy = false; $("auth-inputs").disabled = false; $("auth-form").removeAttribute("aria-busy");
+  $("auth-submit").textContent = authMode === "register" ? "Create account" : "Sign in";
+}

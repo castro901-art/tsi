@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
-def studio(tmp_path, monkeypatch):
+def studio(tmp_path, monkeypatch, request):
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
@@ -29,7 +29,7 @@ def studio(tmp_path, monkeypatch):
     data = tmp_path / "data"
     monkeypatch.setattr(config, "DATA", data)
     env = {**os.environ, "TSI_DATA_DIR": str(data), "TSI_COOKIE_SECURE": "false",
-           "TSI_REGISTRATION_ENABLED": "true", "TSI_APP_ORIGIN": base,
+           "TSI_REGISTRATION_ENABLED": getattr(request, "param", {}).get("registration_enabled", "true"), "TSI_APP_ORIGIN": base,
            "GEMINI_API_KEY": "test-placeholder-never-sent", "TSI_GEMINI_MODEL": "test-model",
            "TSI_PROVIDER_TERMS_ACCEPTED": "true"}
     log = (tmp_path / "api.log").open("w")
@@ -64,10 +64,10 @@ def studio(tmp_path, monkeypatch):
 
 
 def register(page, base):
-    page.goto(base + "/studio")
+    page.goto(base + "/studio/register")
     page.locator("#auth-name").fill("analyst")
     page.locator("#auth-password").fill("test-password-1234")
-    page.locator("#register").click()
+    page.locator("#auth-submit").click()
     playwright.expect(page.locator("#workspace")).to_be_visible()
     playwright.expect(page.locator("#start")).to_be_enabled()
 
@@ -189,10 +189,10 @@ def test_worker_errors_are_not_results(studio, code):
 def test_create_configuration_error_and_capability_retry(studio):
     page, base, tmp_path, errors = studio
     page.route("**/v1/capabilities", lambda route: route.abort())
-    page.goto(base + "/studio")
+    page.goto(base + "/studio/register")
     page.locator("#auth-name").fill("analyst")
     page.locator("#auth-password").fill("test-password-1234")
-    page.locator("#register").click()
+    page.locator("#auth-submit").click()
     playwright.expect(page.locator("#limits")).to_contain_text("Uploads are disabled")
     playwright.expect(page.locator("#start")).to_be_disabled()
     page.unroute("**/v1/capabilities")

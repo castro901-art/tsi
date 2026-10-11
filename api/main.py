@@ -1,11 +1,12 @@
 import asyncio
 import hashlib
+import os
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from uuid import UUID
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, HTMLResponse, RedirectResponse
 from api import config, store
 from api.auth import current_user, router as auth_router
 from api.schemas import MatchInput
@@ -33,10 +34,27 @@ STUDIO = Path(__file__).resolve().parent.parent / "studio"
 app.mount("/studio/assets", StaticFiles(directory=STUDIO), name="studio-assets")
 
 
+def studio_page(mode="login"):
+    # Public presentation settings only. The existing auth endpoint remains authoritative.
+    enabled = os.getenv("TSI_REGISTRATION_ENABLED", "false") == "true"
+    html = (STUDIO / "index.html").read_text(encoding="utf-8")
+    html = html.replace('data-registration-enabled="false"', f'data-registration-enabled="{str(enabled).lower()}"')
+    html = html.replace('data-auth-mode="login"', f'data-auth-mode="{mode}"')
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/studio", include_in_schema=False)
 @app.get("/studio/", include_in_schema=False)
 def studio():
-    return FileResponse(STUDIO / "index.html", headers={"Cache-Control": "no-store"})
+    return studio_page()
+
+
+@app.get("/studio/register", include_in_schema=False)
+@app.get("/studio/register/", include_in_schema=False)
+def studio_registration():
+    if os.getenv("TSI_REGISTRATION_ENABLED", "false") != "true":
+        return RedirectResponse("/studio", status_code=303, headers={"Cache-Control": "no-store"})
+    return studio_page("register")
 
 def job(job_id, owner_id):
     try:
