@@ -19,7 +19,7 @@ def process(job_id, provider):
         events = []
         for event_id, event in zip(ids, findings.events):
             events.append({**event.model_dump(), "id": event_id, "match_id": job_id, "verification_status": "unverified", "team_id": None, "player_id": None,
-                           "source_reference": {"upload_id": job_id, "sha256": item["sha256"], "timestamp_basis": "source_video_seconds"},
+                           "source_reference": {"upload_id": job_id, "sha256": item["sha256"], "timestamp_basis": "source_video_seconds", "source_url": item["metadata"].get("source_url"), "source_platform": item["metadata"].get("source_platform")},
                            "model": provider.model, "pipeline_version": config.PIPELINE_VERSION})
         interpretations = [{"section": c.section, "text": c.text, "evidence_ids": [ids[i] for i in c.event_indices], "kind": "model_interpretation", "verification_status": "unverified"} for c in findings.interpretations]
         store.transition(job_id, "processing", "completed", result={"events": events, "interpretations": interpretations, "limitations": LIMITATIONS + findings.limitations, "analysed_at": time.time(), "model": provider.model, "pipeline_version": config.PIPELINE_VERSION})

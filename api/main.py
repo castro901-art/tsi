@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import json
 import os
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
@@ -9,6 +10,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, HTMLResponse, RedirectResponse
 from api import config, store
 from api.auth import current_user, router as auth_router
+from api.links import router as links_router, link_capabilities
 from api.schemas import MatchInput
 from api.video import VideoError, probe
 
@@ -28,6 +30,7 @@ async def lifespan(app):
 
 app = FastAPI(title="TSI API", version=config.PIPELINE_VERSION, lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(auth_router)
+app.include_router(links_router)
 
 # Serve only public studio assets; never expose private footage or account data.
 STUDIO = Path(__file__).resolve().parent.parent / "studio"
@@ -74,7 +77,7 @@ def health():
 
 @app.get("/v1/capabilities")
 def capabilities(user=Depends(current_user)):
-    return {"sources": ["mp4_upload"], "url_ingestion": False, "max_bytes": config.MAX_BYTES, "max_seconds": config.MAX_SECONDS, "movement_tracking": False, "account_authentication": True}
+    return {"sources": ["mp4_upload"], **link_capabilities(), "max_bytes": config.MAX_BYTES, "max_seconds": config.MAX_SECONDS, "movement_tracking": False, "account_authentication": True}
 
 
 @app.post("/v1/analyses", status_code=201)
@@ -129,8 +132,8 @@ async def upload(job_id: str, request: Request, user=Depends(current_user)):
 @app.get("/v1/analyses")
 def listing(user=Depends(current_user)):
     with store.connection() as db:
-        rows = db.execute("SELECT id,status,created,error FROM analyses WHERE owner_id=? ORDER BY created DESC", (user["id"],)).fetchall()
-    return [dict(row) for row in rows]
+        rows = db.execute("SELECT id,status,created,error,metadata FROM analyses WHERE owner_id=? ORDER BY created DESC", (user["id"],)).fetchall()
+    return [{**dict(row), "metadata": json.loads(row["metadata"])} for row in rows]
 
 
 @app.get("/v1/analyses/{job_id}")
@@ -145,6 +148,8 @@ def report(job_id: str, user=Depends(current_user)):
         raise HTTPException(409, "Analysis has not completed.")
     result = item["result"]
     lines = [item["metadata"]["title"], "TSI | Trendify Labs", f"Source upload: {job_id}", f"Analysis date (Unix UTC): {result['analysed_at']}", "Verification: model candidates; not human-verified", "", "LIMITATIONS", *result["limitations"], "", "CANDIDATE OBSERVATIONS"]
+    if item["metadata"].get("source_url"):
+        lines.extend(["Source link: " + item["metadata"]["source_url"], "Source platform: " + item["metadata"]["source_platform"]])
     for event in result["events"]:
         lines.append(f"[{event['id']}] {event['start_seconds']:.1f}-{event['end_seconds']:.1f}s | {event['event_type']} | {event['observation']}")
     lines += ["", "TACTICAL INTERPRETATIONS (UNVERIFIED)"]
